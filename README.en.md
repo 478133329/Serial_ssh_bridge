@@ -11,6 +11,8 @@
 | Feature | Description |
 |---------|-------------|
 | SSH shell passthrough | Multiple clients; bidirectional serial forwarding |
+| Claude Code | Use Claude Code as an SSH client (via MCP terminal) |
+| Claude skills | Skills guide Claude’s roles and safe operation order |
 | UART upgrade | SSH `exec` runs `uart-upgrade` (FIP slices + U-Boot `fip.bin`) |
 | Progress | Per-file `[progress] name N% (sent/total)` on SSH shells |
 | SCP upload | Upload files to the directory next to the bridge binary |
@@ -44,6 +46,37 @@ serial-ssh-bridge/
 3. Board reboots to U-Boot; wait for **`Start UART downloading`** → switch to high baud → **`Ready for binary`**
 4. Kermit sends **full `fip.bin`** only (no other images from XML)
 
+## Roles & topology (Target / Jump Host / Client)
+
+This project typically involves three roles:
+
+- **Target hardware (DUT)**: the embedded board connected via **UART** to the jump host
+- **Jump host (Bridge)**: runs `serial_ssh_bridge`; exposes **SSH/SCP** to the network and controls **UART upgrade**
+- **Client (Server/Dev/CI/Claude)**: connects over the network to the jump host (SSH or Claude Code MCP) to debug and trigger upgrades
+
+Typical topology:
+
+```text
+┌────────────────────┐        TCP/SSH/SCP         ┌──────────────────────────┐
+│ Client machine      │  ───────────────────────▶ │ Jump Host (this project) │
+│ (ssh/scp/Claude)    │                            │ serial_ssh_bridge        │
+└────────────────────┘  ◀───────────────────────  └──────────────┬───────────┘
+            ▲                 shell + status                      │ UART (COM)
+            │                                                     │
+            │                                                     ▼
+            │                                          ┌──────────────────────┐
+            └───────────────────────────────────────── │ Target hardware (DUT) │
+                          serial output (broadcast)     │ U-Boot / ROM / Linux  │
+                                                        └──────────────────────┘
+```
+
+Data/control paths:
+
+- **Interactive passthrough (SSH shell)**: the client opens an SSH shell to the jump host; the jump host writes input to UART and broadcasts UART output back to all shell clients.
+- **Upgrade trigger (SSH exec)**: the client runs `ssh ... uart-upgrade`; the jump host pauses shell writes, takes exclusive UART access for flashing, then restores passthrough.
+- **File staging (SCP upload)**: the client uploads files to the jump host (saved next to the bridge binary), e.g. for delivering `fip.bin`.
+- **Claude Code mode**: Claude acts as the client; skills define roles and safe operation order.
+
 ## Requirements
 
 ### Windows (exe or source)
@@ -62,6 +95,29 @@ serial-ssh-bridge/
 
 > **Important:** A Windows PyInstaller `.exe` **cannot** be copied to Ubuntu. On Linux, run `build_ext` and package on that system, or run `python serial_ssh_bridge.py` from source.
 
+### Claude Code setup (on the client machine)
+
+If you plan to operate the jump host using Claude Code, set up an MCP terminal so Claude can reliably SSH into the jump host.
+
+1. Install MCP terminal: use **`mcp-interactive-terminal`** for a stable SSH experience.
+2. In your project directory, run:
+
+```bash
+claude mcp add mcp-interactive-terminal -- npx -y mcp-interactive-terminal
+```
+
+3. Start Claude Code and run `/mcp` to verify the terminal is loaded.
+4. Ask Claude to read your Skill first so it understands the workflow and roles before operating the device.
+
+### Claude skills
+
+1. Put skill files under `.claude/skills/`.
+2. Clearly define these roles in the Skill to avoid confusion:
+   - **Client machine (Claude)**
+   - **Jump host (this bridge)**
+   - **Target hardware (UART peer)**
+3. Start from a verified Skill template if your team has one.
+
 ## Quick start (Windows prebuilt exe)
 
 1. Place `fip.bin` **next to** `serial_ssh_bridge.exe` (e.g. `bridge/dist/`)
@@ -72,14 +128,26 @@ cd bridge\dist
 .\serial_ssh_bridge.exe -p COM3 -b 115200 --ssh-port 2222
 ```
 
-3. SSH shell passthrough:
+3. Choose an operation mode (pick one):
+
+#### Mode A: Operate via Claude
+
+1. Ensure your Skill contains the correct jump host address, SSH port (default `2222`), and credentials.
+2. Start Claude Code and load the Skill (see “Claude skills” above).
+3. Verify MCP terminal is connected (`/mcp`), then instruct Claude to:
+   - read serial output
+   - run `uart-upgrade` (SSH exec) when needed
+
+#### Mode B: Manual SSH (no Claude)
+
+**B.1 SSH shell passthrough**
 
 ```bash
 ssh -p 2222 admin@<bridge_ip>
 # Default password: 123456
 ```
 
-4. Trigger UART upgrade (separate terminal, exec):
+**B.2 Trigger UART upgrade** (separate terminal, SSH exec)
 
 ```bash
 ssh -p 2222 admin@<bridge_ip> uart-upgrade
