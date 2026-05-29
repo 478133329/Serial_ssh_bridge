@@ -132,6 +132,7 @@ cd bridge\dist
 3. 在 Claude 中确认 MCP `mcp-interactive-terminal` 已连接（`/mcp` 检查）。
 4. 向 Claude 下达指令，例如读取设备串口输出、执行 `uart-upgrade` 等。
 5. 可以使用Deepseek-V4-Flash，消耗费用较少
+### 演示视频
 https://github.com/user-attachments/assets/f5fc135c-5cf8-4dd7-a395-6777bbb5149f
 #### 方式 B：手动 SSH（不使用 Claude）
 
