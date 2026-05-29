@@ -122,7 +122,7 @@ serial-ssh-bridge/          # 建议 GitHub 仓库名
 cd bridge\dist
 .\serial_ssh_bridge.exe -p COM3 -b 115200 --ssh-port 2222
 ```
-
+https://github.com/user-attachments/assets/f5fc135c-5cf8-4dd7-a395-6777bbb5149f
 1. 选择对接方式（二选一）：
 
 #### 方式 A：通过 Claude 操作
