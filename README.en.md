@@ -137,6 +137,8 @@ cd bridge\dist
 3. Verify MCP terminal is connected (`/mcp`), then instruct Claude to:
    - read serial output
    - run `uart-upgrade` (SSH exec) when needed
+### Video
+https://github.com/user-attachments/assets/f5fc135c-5cf8-4dd7-a395-6777bbb5149f
 
 #### Mode B: Manual SSH (no Claude)
 
