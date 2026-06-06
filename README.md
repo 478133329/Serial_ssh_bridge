@@ -115,12 +115,13 @@ serial-ssh-bridge/          # 建议 GitHub 仓库名
 
 ## 快速开始（Windows 预编译 exe）
 
-1. 将 `fip.bin` 放到与 `serial_ssh_bridge.exe` **同级目录**（例如 `bridge/dist/`）
-2. 启动 bridge：
+1. 将 `fip.bin` 放到与 `serial_ssh_bridge.exe` **同级目录**（例如 `bridge/dist/`）,注意需要在uboot 下的cvi_update.c 中将下载波特率改成115200
+   串口升级在uboot阶段才不会报错
+3. 启动 bridge：
 
 ```powershell
 cd bridge\dist
-.\serial_ssh_bridge.exe -p COM3 -b 115200 --ssh-port 2222
+.\serial_ssh_bridge.exe -p COM3 -b 115200 --ssh-port 2222 --uboot-baudrate 115200
 ```
 
 1. 选择对接方式（二选一）：
