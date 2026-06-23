@@ -278,7 +278,7 @@ After switch, CurrentEL=1
 | 1 | PERI_INTC2 | 0x27112000 |
 | 2 | PERI_INTC1 | 0x27111000 |
 | 3 | PERI_INTC0 | 0x27110000 |
-| 4 | PERI_OTP | 0x27100000 |
+| 4 | PERI_OTP | 0x27100000 | 默认 SKIP |
 | 5 | PERI_MAILBOX | 0x270F0000 |
 | 6 | PERI_SARADC | 0x270E0000 |
 | 7 | PERI_TEMPSEN | 0x270D0000 |
@@ -407,5 +407,5 @@ bash build_scripts/build_security.sh
 |------|------|
 | 串口无响应 | 按 se9_uartdl_skill 检查 SSH 2222 桥接或 COM 口 |
 | reset 后未回到 CLI | 等待更长时间，确认固件自动启动 |
-| 系统挂死 | 硬件复位，从下一条未测用例继续 |
+| 系统挂死 | 记录结果，提示手动完成硬件复位，从下一条未测用例继续 |
 | 编译失败 | 确认交叉编译工具链和 BOARD=ASIC 环境 |
