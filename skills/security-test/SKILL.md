@@ -8,113 +8,105 @@ description: >-
   flexible memory/EL verification on bmtest.
 ---
 
-# Athena2 Security 批量测试
+# Athena2 Security 测试
 
-Agent 通过串口向 bmtest **直接发送 CLI 命令**。正式测试用 `_secure` 套件；**辅助验证**用原语命令（`rm`/`wm`/`switch_el1`/`current_el`）提高结果可信度。
-
-**固件 log 不会输出 PASS/FAIL**，Agent 须根据读值自行判定，规则见 [reference.md](reference.md)。
+| 对象 | 说明 |
+|------|------|
+| 测试环境 | 裸机环境，只能使用 bmtest 中的命令 |
+| bmtest | 封装 `peri_secure` / `hsperi_secure` 等命令，内部完成寄存器配置 + EL 切换 |
+| 辅助测试 | `rm`/`wm`/`switch_el1`/`current_el`/`reset`；配置规律见 [references/testcase_security.c](references/testcase_security.c) |
 
 ## 关联文档
 
 | 文档 | 用途 |
 |------|------|
-| [se9_uartdl_skill.md](../se9_uartdl_skill.md) | 烧录、串口连接 |
-| [reference.md](reference.md) | 判定规则、log 字段、IP 表 |
+| [uart_skill.md](uart_skill.md) | 串口连接 |
+| [reference.md](references/reference.md) | **判定规则**、log 字段、寄存器位语义 |
+| [security_reg.md](references/security_reg.md) | 寄存器绝对地址、index→bit 映射 |
+| [security_testcase.md](references/security_testcase.md) | 官方验证表格用例总结 |
 | [test_cases.md](test_cases.md) | 批量测试命令清单 |
-| [flexible_test.md](flexible_test.md) | **原语命令与灵活辅助测试** |
-| [templates/report_template.md](templates/report_template.md) | 报告模板 |
+| [report_template.md](templates/report_template.md) | 报告模板 |
 
-## 两层测试策略
+## 测试套件（bmtest）
 
-| 层级 | 命令类型 | 目的 |
-|------|----------|------|
-| **正式** | `*_secure` 套件 | 批量防火墙测试，产出 PASS/FAIL 结论 |
-| **辅助** | `rm` `wm` `switch_el1` `current_el` `illegal_slave_access_info` | 复核读值、确认 EL、补充非法访问日志 |
-
-Agent **必须先完成正式测试**；对存疑/FAIL 项，按 [flexible_test.md](flexible_test.md) 执行辅助验证，并在报告备注中标注。
-
-## 原语命令速查
-
-| 命令 | 示例 | 用途 |
-|------|------|------|
-| `current_el` | `current_el` | 确认 CurrentEL（3=EL3, 1=EL1） |
-| `switch_el1` | `switch_el1` | EL3→非安全 EL1 |
-| `rm` | `rm 29210000` | 读地址（hex） |
-| `wm` | `wm 27113000 87654321` | 写地址（hex） |
-| `illegal_slave_access_info` | `illegal_slave_access_info 0` | 非法访问日志 |
-| `reset` | `reset` | 复位（每条用例后必做） |
-
-详细工作流见 [flexible_test.md](flexible_test.md)。
-
-## 正式测试套件
-
-| 套件 | 命令 | 数量 | 类型 |
-|------|------|------|------|
-| peri | `peri_secure <i>` | 28 | 写探针 |
-| hsperi | `hsperi_secure <g> <i>` | 42 可测 | 读对比 |
-| top_axi | `top_axi_fab_secure <i>` | 8 | 写探针 |
-| axi_hsperi | `axi_hsperi_secure <i>` | 14 可测 | 读对比 |
+| 套件 | 命令 | 数量 | 判定类型 |
+|------|------|------|----------|
+| peri | `peri_secure <i>` | 28 | **写探针** |
+| hsperi | `hsperi_secure <g> <i>` | 42 可测 | **读对比** |
 | dram_region | `dram_secure_region <0-7>` | 8 | 读对比 |
 | dram_obf | `dram_obfuscation 0` | 1 | 混淆验证 |
 | rom_region | `rom_secure_region <0-23>` | 24 | 读对比 |
 | rom_lock | `rom_read_lock <0-23>` | 24 | 读对比 |
 | rom_define | `rom_define_region 0` | 1 | 读对比 |
 
-**重要**：需要逐一完成每一个测试项，不能使用脚本或其他方式优化测试步骤。
+**为保证测试稳定，须逐条手动执行，不要用脚本批量刷命令。**
 
 ## Agent 执行步骤
 
+Agent 通过串口向 bmtest **直接发送 CLI 命令**，通信方式见 [uart_skill.md](uart_skill.md)。
+
+**固件 log 不会输出 PASS/FAIL**，判定规则见 [reference.md](references/reference.md)。
+
 ### 1. 连接串口
 
-按 [se9_uartdl_skill.md](../se9_uartdl_skill.md)，等待 `$ ` prompt。
+等待 `$ ` prompt。开机 log 结束后 **等待 2s** 再发命令。
 
-### 2. 正式测试循环
-
-```
-发送 _secure 命令 → 收集 log → 判定 → （可选）辅助复核 → reset → 下一条
-```
-
-**辅助复核**（CLI 仍可用时，任选）：
+### 2. 测试循环
 
 ```
-current_el
-rm <同测试地址>
-illegal_slave_access_info 0   # FAIL/BLOCKED 时推荐
+发送 bmtest 命令 → 收集 log → 判定 → reset → 下一条
 ```
 
-### 3. 判定（正式测试）
+**每条用例后必须 `reset`**，否则 EL 切换后可能挂死且无法恢复。不要用 Ctrl+C。
 
-#### 读对比类（hsperi / axi_hsperi / rom_* / dram_secure_region）
+### 3. 结果判定（摘要）
+
+完整规则见 [reference.md](references/reference.md)。
+
+#### 写探针类：`peri_secure`
+
+```
+EL3 写探针 0x87654321 → switch_el1 → EL1 读回
+EL1读值 ≠ 0x87654321  →  PASS（写未穿透）
+EL1读值 == 0x87654321  →  FAIL
+挂死 / INT: recv interrupt  →  PASS(BLOCKED) / PASS
+```
+
+#### 读对比类：`hsperi_secure` / `rom_*` / `dram_secure_region`
 
 ```
 EL3读值 ≠ EL1读值  →  PASS
-EL3读值 == EL1读值  →  FAIL
-超时挂死            →  PASS(BLOCKED)
-INT: recv interrupt →  PASS
+EL3读值 == EL1读值  →  触发辅助测试（勿直接 FAIL）→ 见 reference.md「辅助测试流程」
+挂死  →  PASS(BLOCKED) 或记录完整 log
+INT: recv interrupt  →  PASS
 ```
 
-#### 写探针类（peri / top_axi）
+#### 辅助测试（EL3==EL1 时）
 
-```
-EL1读值 ≠ 探针值  →  PASS    （探针：peri=87654321, top_axi=11111111）
-EL1读值 == 探针值  →  FAIL
-```
+正式用例 `reset` 后，按 [reference.md](references/reference.md) 辅助测试流程：
 
-#### 混淆验证（dram_obfuscation）
+1. 从 log 或 [security_reg.md](references/security_reg.md) §4 取探测基址
+2. `wm 0x33030004 0x7FD` + 置位 `tz_s` → `rm` 主地址 → `switch_el1` → `rm` 对比
+3. 仍相同则换 `+4` / `+8` / `+0x10` 重测（每次 `switch_el1` 后须 `reset`）
+4. 查 `0x3303004C/50` 非法访问日志；配置正确且全部相同 → **FAIL**
 
-混淆 OFF 读值 == 明文 `76543210`，ON 时 ≠ 明文 → PASS。
+辅助结论记入报告「辅助验证记录」。
+
+#### 混淆验证：`dram_obfuscation`
+
+混淆 OFF 读值 == `0x76543210`，ON 时 ≠ 明文 → PASS。
 
 ### 4. 生成报告
 
-填入报告模板，辅助验证结果写入「备注」列（如 `已 rm 复核`）。
+填入 [report_template.md](templates/report_template.md)。
 
 ## 挂死恢复
 
-`reset` 无法送达 → 记 PASS(BLOCKED) → 硬件复位 → 继续下一条。
+1. 尝试 `reset` → 继续下一条
+2. 无效则记 PENDING，提示用户硬件复位 → 从下一条未测用例继续
 
-## 特例
+## 特例（SKIP）
 
-- `hsperi_secure 1 9`：SKIP（UART0）
-- `axi_hsperi_secure 0`：SKIP
-- `axi_hsperi_secure 1`：APSYS 允许非安全读，完成即 PASS
-- 原语 `rm`/`wm` **不配置防火墙**，不能单独替代 `_secure` 套件
+- `hsperi_secure 1 9`：UART0（与调试串口冲突）
+- `peri_secure 4`：OTP
+- `rom_secure_region 15`：ROM 阶段已使能该防火墙
